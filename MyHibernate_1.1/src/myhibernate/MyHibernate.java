@@ -9,8 +9,9 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
-import Interceptor.Interceptor;
-import Interceptor.ProxyFactory;
+import myhibernate.interceptor.Interceptor;
+import myhibernate.interceptor.ProxyFactory;
+
 import myhibernate.ann.Column;
 import myhibernate.ann.Id;
 import myhibernate.ann.JoinColumn;
