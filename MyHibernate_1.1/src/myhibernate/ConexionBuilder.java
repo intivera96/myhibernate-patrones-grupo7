@@ -9,7 +9,7 @@ public class ConexionBuilder
 {
 	
 	private static final String driver = "org.hsqldb.jdbc.JDBCDriver" ;
-	private static String url = "jdbc:hsqldb:hsql://localhost:9001/xdb";
+	private static String url = "";
 	
 	public static Connection buildConexion() {
 		try{
@@ -19,7 +19,10 @@ public class ConexionBuilder
 			url = s.nextLine();
 			
 			Class.forName(driver);
+			
 			return DriverManager.getConnection(url);
+			
+			
 		} 
 		catch(Exception e){
 			System.out.println("Error al conectar: " + e);
