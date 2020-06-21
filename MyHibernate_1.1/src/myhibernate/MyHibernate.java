@@ -11,7 +11,6 @@ import java.util.List;
 
 import myhibernate.interceptor.Interceptor;
 import myhibernate.interceptor.ProxyFactory;
-
 import myhibernate.ann.Column;
 import myhibernate.ann.Id;
 import myhibernate.ann.JoinColumn;
@@ -25,7 +24,7 @@ public class MyHibernate
    {
 	   if(id == 0) return null;
 	   
-	   String tabla = null;
+	   String tabla = new String();
 	   ResultSet resultados = null;
 	   Field[] campos;
 	   
@@ -55,24 +54,7 @@ public class MyHibernate
 			   }
 		   }
 		   
-		   if(id == 1 && tabla.toLowerCase().equals("empleado"))
-		   {
-			   query = "select ";
-			   
-			   for(Field campo: campos)
-			   {
-				   if(campo.getAnnotation(Id.class) == null) query += ", ";
-				   if(campo.getAnnotation(Column.class) != null)
-				   query += tabla + "." + campo.getAnnotation(Column.class).name() + 
-						   " AS " + campo.getAnnotation(Column.class).name() + "_" + tabla;
-				   else
-					   query += tabla + "." + campo.getAnnotation(JoinColumn.class).name() + 
-					   " AS " + atributoId + "_" + tabla + "1"; 
-			   }
-			   query += " from " + tabla + where + id;
-			   
-		   }
-		   else query = generarQuery(tabla, campos) + where + id;
+		   query = generarQuery(tabla, campos) + where + id;
 		   
 		   resultados = obtenerResultado(query, conexion);
 		   
@@ -111,31 +93,27 @@ public class MyHibernate
    private static <T> T crearObjeto(Class<T> c, ResultSet rs, Field[] fs)
 	{
 	   T obj = null;
-	   String id = new String();
+	   
 	   try
 	   {
 		   obj = c.newInstance();
-		   
-		   Method set = null;
-		   
-		   String columna;
-		   
+		   		   
 		   for(Field campo:fs)
 		   {
-			   set = getSetter(c.getDeclaredMethods(), campo);
+			   Method set = getSetter(c.getDeclaredMethods(), campo);
 			   
 			   String nCampo = new String();
-			   
-			   if(campo.getAnnotation(Id.class) != null)id = campo.getAnnotation(Column.class).name();
 			   
 			   if(campo.getAnnotation(Column.class)!=null)
 				   nCampo = campo.getDeclaredAnnotation(Column.class).name();
 			   else
 			   {
-				   if(campo.getType().getSimpleName().equals(c.getSimpleName()))nCampo += id;
+				   if(campo.getType().getSimpleName().equals(c.getSimpleName()))
+					   nCampo += campo.getAnnotation(JoinColumn.class).name();
 			   }
 					
-			   columna = nCampo + "_" + c.getAnnotation(Table.class).name();
+			   String columna = nCampo + "_" + c.getAnnotation(Table.class).name();
+			   
 			   
 			   switch(campo.getType().getSimpleName())
 			   {
@@ -161,12 +139,11 @@ public class MyHibernate
 					   if(campo.getType().getSimpleName().equals(c.getSimpleName()))
 					   {
 						   T objcampo = null;
-						   columna += "1";
 						   int var = rs.getInt(columna);
 						   
 						   if(var != 0)
 						   {
-							   objcampo = (T)ProxyFactory.newInstance(campo.getType(),Interceptor.class, rs.getInt(columna));
+							   objcampo = (T)ProxyFactory.newInstance(campo.getType(),Interceptor.class, var);
 							   set.invoke(obj, objcampo);
 						   }
 						   else 
@@ -238,47 +215,34 @@ public class MyHibernate
 	   
 	   return rs;
 	
-}
+   }
 
-   private static <T> List<String> introspeccion(Field[] listacampos, String tabla, String tablaAnterior)
+   private static <T> List<String> introspeccion(Field[] listacampos, String tabla)
    {
 	   List <String> atrib = new ArrayList <String> ();
-	   String atributoId = new String();
 	   
 	   for (Field campo:listacampos)
 	   {
-		   if(campo.getAnnotation(Id.class) != null)
+		   if(campo.getAnnotation(ManyToOne.class) == null)
 		   {
-			   if(tablaAnterior.equals(tabla))
-			   {
-				   atributoId = "," + tabla + "1" + "." + campo.getAnnotation(Column.class).name() +
-						   " AS " + campo.getAnnotation(Column.class).name() + "_" + tabla + "1";
-				   break;
-			   }
-			   else
-			   {
-				   atributoId = "," + tabla + "." + campo.getAnnotation(Column.class).name() + 
-					   " AS " + campo.getAnnotation(Column.class).name() + "_" + tabla;
-			   }
-			   
+			   atrib.add("," + tabla + "." + campo.getAnnotation(Column.class).name() + 
+					   " AS " + campo.getAnnotation(Column.class).name() + "_" + tabla);
 		   }
 		   else
 		   {
-			   if(campo.getAnnotation(ManyToOne.class) == null)
+			   if(!campo.getType().getAnnotation(Table.class).name().equals(tabla))	
 			   {
-				   atrib.add("," + tabla + "." + campo.getAnnotation(Column.class).name() + 
-						   " AS " + campo.getAnnotation(Column.class).name() + "_" + tabla);
+				   Field[] listacampos2 = campo.getType().getDeclaredFields();
+				   				   
+				   atrib.addAll(introspeccion(listacampos2, campo.getType().getAnnotation(Table.class).name()));
 			   }
 			   else
 			   {
-				   Field[] listacampos2 = campo.getType().getDeclaredFields();
-					   				   
-				   atrib.addAll(introspeccion(listacampos2, campo.getType().getAnnotation(Table.class).name(), tabla));
+				   atrib.add("," + tabla + "." + campo.getAnnotation(JoinColumn.class).name() + 
+						   " AS " + campo.getAnnotation(JoinColumn.class).name() + "_" + tabla);
 			   }
 		   }
 	   }
-	   
-	   atrib.add(0,atributoId);
 	   
 	   return atrib;
    }
@@ -288,12 +252,8 @@ public class MyHibernate
 	   String select = new String();
 	   String from = tabla;
 	   
-	   String atributoId = new String();
-	   
 	   for (Field campo:listacampos)
-	   {
-		   if(campo.getAnnotation(Id.class) != null)atributoId = campo.getAnnotation(Column.class).name();
-		   
+	   {		   
 		   if(campo.getAnnotation(ManyToOne.class) == null)
 		   	{
 			   select += ", " + tabla+ "." + campo.getAnnotation(Column.class).name() + " AS " + campo.getAnnotation(Column.class).name() + "_" + tabla;
@@ -310,19 +270,17 @@ public class MyHibernate
 		   			
 		   			for(String t:tablas)
 		   			from += t;
-		   		}
-		   		else
-		   		{
-		   			from += " JOIN " + campo.getType().getAnnotation(Table.class).name() + " AS "
-		   					+ campo.getType().getAnnotation(Table.class).name() + "1" + " ON "
-					   		+ tabla + "." + campo.getAnnotation(JoinColumn.class).name() + " = "
-					   		+ campo.getType().getAnnotation(Table.class).name() + "1" + "." + atributoId;
-		   		}
 		   		
-		   		List <String> atributos = introspeccion(campo.getType().getDeclaredFields(), campo.getType().getAnnotation(Table.class).name(), tabla);
+		   			List <String> atributos = introspeccion(campo.getType().getDeclaredFields(), campo.getType().getAnnotation(Table.class).name());
 		   		
 		   			for(String atributo:atributos)
 		   				select += atributo;
+		   		}
+		   		else
+		   		{
+		   			select += "," + tabla + "." + campo.getAnnotation(JoinColumn.class).name() + 
+		   					" AS " + campo.getAnnotation(JoinColumn.class).name() + "_" + tabla;
+		   		}
 		   	}
 	   	}
    
@@ -335,29 +293,15 @@ public class MyHibernate
    {
 	
 	   List <String> tablas = new ArrayList<String>();
-	   String id = new String();
 	   
 		   for(Field c:lc)
 		   {
-			   if(c.getAnnotation(Id.class) != null)id = c.getAnnotation(Column.class).name();
-			   if(c.getAnnotation(ManyToOne.class) != null)
+			   if(c.getAnnotation(ManyToOne.class) != null && !c.getType().getAnnotation(Table.class).name().equals(tabla))
 			   {
-					 if(!c.getType().getAnnotation(Table.class).name().equals(tabla))
-					 {  
 					   tablas.add(" JOIN " + c.getType().getAnnotation(Table.class).name() + " ON "
 							   		+ tabla + "." + c.getAnnotation(JoinColumn.class).name() + " = "
 							   		+ c.getType().getAnnotation(Table.class).name() + "." + c.getAnnotation(JoinColumn.class).name());
 					   
-					 }
-					 else
-					 {
-						 tablas.add(" JOIN " + c.getType().getAnnotation(Table.class).name() + " AS "
-								 + c.getType().getAnnotation(Table.class).name() + "1" + " ON "
-								 + tabla + "." + c.getAnnotation(JoinColumn.class).name() + " = "
-							   	 + c.getType().getAnnotation(Table.class).name() + "1" + "." + id);
-						 break;
-					 }
-					 
 					   tablas.addAll(joiner(c.getType().getDeclaredFields(), c.getType().getAnnotation(Table.class).name()));
 			   }
 		   }
@@ -373,7 +317,7 @@ public class MyHibernate
 	Connection conexion = ConexionBuilder.buildConexion();
 	T t;
 	Field[] campos;
-	String tabla = null;
+	String tabla = new String();
 	
 	if(clazz.getAnnotation(Table.class) != null)
 	   {
@@ -417,13 +361,11 @@ public class MyHibernate
    return listat;
    }
 
-   return listat;
-   }
-
    public static Query createQuery(String hql)
    {
-      // PROGRAMAR AQUI
-      return null;
+      Query nuevoQuery = new Query();
+      nuevoQuery.setConsulta(hql);
+      return nuevoQuery;
    }
 
 }
