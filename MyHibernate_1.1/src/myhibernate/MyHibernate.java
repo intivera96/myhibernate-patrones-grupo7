@@ -9,6 +9,8 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.reflections.Reflections;
+
 import myhibernate.interceptor.Interceptor;
 import myhibernate.interceptor.ProxyFactory;
 import myhibernate.ann.Column;
@@ -22,35 +24,31 @@ public class MyHibernate
 	//ENREGA 1: FIND
    public static <T> T find(Class<T> clazz, int id)
    {
-	   if(id == 0) return null;
-	   
 	   String tabla = new String();
 	   ResultSet resultados = null;
 	   Field[] campos;
 	   
-	   Id ID;
 	   String query = new String();
 	   String where = " where ";
-	   String atributoId = new String();
 	   
 	   T t = null;
 	   
+	   if(id == 0) return t = (T)ProxyFactory.newInstance(clazz,Interceptor.class, 0);
+	   
 	   Connection conexion = ConexionBuilder.buildConexion();
 	   
-	   if(clazz.getAnnotation(Table.class) != null)
+	   if(clazz.isAnnotationPresent(Table.class))
 	   {
 		   tabla = clazz.getAnnotation(Table.class).name();
 		   
 		   campos = clazz.getDeclaredFields();
 		   
 		   for (Field campo:campos)
-		   {
-			   ID = campo.getAnnotation(Id.class);
-			   
-			   if(ID != null)
+		   {			   
+			   if(campo.isAnnotationPresent(Id.class))
 			   {
-				   atributoId = campo.getAnnotation(Column.class).name();
-				   where += tabla + "." + atributoId + " = ";
+				   where += tabla + "." + campo.getAnnotation(Column.class).name() + " = ";
+				   break;
 			   }
 		   }
 		   
@@ -90,7 +88,7 @@ public class MyHibernate
 	   
    }
 
-   private static <T> T crearObjeto(Class<T> c, ResultSet rs, Field[] fs)
+   static <T> T crearObjeto(Class<T> c, ResultSet rs, Field[] fs)
 	{
 	   T obj = null;
 	   
@@ -100,11 +98,11 @@ public class MyHibernate
 		   		   
 		   for(Field campo:fs)
 		   {
-			   Method set = getSetter(c.getDeclaredMethods(), campo);
+			   Method set = c.getDeclaredMethod("set" + campo.getName().toUpperCase().charAt(0) + campo.getName().substring(1),campo.getType());
 			   
 			   String nCampo = new String();
 			   
-			   if(campo.getAnnotation(Column.class)!=null)
+			   if(campo.isAnnotationPresent(Column.class))
 				   nCampo = campo.getDeclaredAnnotation(Column.class).name();
 			   else
 			   {
@@ -167,23 +165,7 @@ public class MyHibernate
 	   return obj;
 	}
 
-   private static Method getSetter(Method[] dms, Field c)
-   {
-	   Method setter = null;
-	   
-	   for(Method metodo:dms)
-	   {
-		   if(metodo.getName().contains("set") && metodo.getName().substring(4).equals(c.getName().substring(1)))
-		   {
-			   setter = metodo;
-			   break;
-		   }		
-	   }
-	   
-	   return setter;
-   }
-
-   private static ResultSet obtenerResultado(String q, Connection c)
+   static ResultSet obtenerResultado(String q, Connection c)
    {
 	   ResultSet rs = null;
 	   PreparedStatement prepstate = null;
@@ -217,13 +199,13 @@ public class MyHibernate
 	
    }
 
-   private static <T> List<String> introspeccion(Field[] listacampos, String tabla)
+   public static <T> List<String> introspeccion(Field[] listacampos, String tabla)
    {
 	   List <String> atrib = new ArrayList <String> ();
 	   
 	   for (Field campo:listacampos)
 	   {
-		   if(campo.getAnnotation(ManyToOne.class) == null)
+		   if(!campo.isAnnotationPresent(ManyToOne.class))
 		   {
 			   atrib.add("," + tabla + "." + campo.getAnnotation(Column.class).name() + 
 					   " AS " + campo.getAnnotation(Column.class).name() + "_" + tabla);
@@ -254,7 +236,7 @@ public class MyHibernate
 	   
 	   for (Field campo:listacampos)
 	   {		   
-		   if(campo.getAnnotation(ManyToOne.class) == null)
+		   if(campo.isAnnotationPresent(ManyToOne.class))
 		   	{
 			   select += ", " + tabla+ "." + campo.getAnnotation(Column.class).name() + " AS " + campo.getAnnotation(Column.class).name() + "_" + tabla;
 		   	}
@@ -289,14 +271,14 @@ public class MyHibernate
 	   return "select " + select + " from " + from;
    }
 
-   private static List<String> joiner(Field[] lc, String tabla)
+   public static List<String> joiner(Field[] lc, String tabla)
    {
 	
 	   List <String> tablas = new ArrayList<String>();
 	   
 		   for(Field c:lc)
 		   {
-			   if(c.getAnnotation(ManyToOne.class) != null && !c.getType().getAnnotation(Table.class).name().equals(tabla))
+			   if(c.isAnnotationPresent(ManyToOne.class) && !c.getType().getAnnotation(Table.class).name().equals(tabla))
 			   {
 					   tablas.add(" JOIN " + c.getType().getAnnotation(Table.class).name() + " ON "
 							   		+ tabla + "." + c.getAnnotation(JoinColumn.class).name() + " = "
@@ -319,7 +301,7 @@ public class MyHibernate
 	Field[] campos;
 	String tabla = new String();
 	
-	if(clazz.getAnnotation(Table.class) != null)
+	if(clazz.isAnnotationPresent(Table.class))
 	   {
 		tabla = clazz.getAnnotation(Table.class).name();
 		campos = clazz.getDeclaredFields();
@@ -361,11 +343,13 @@ public class MyHibernate
    return listat;
    }
 
+   //ENTREGA 3: HQL
    public static Query createQuery(String hql)
    {
       Query nuevoQuery = new Query();
       nuevoQuery.setConsulta(hql);
       return nuevoQuery;
+      
    }
 
 }
