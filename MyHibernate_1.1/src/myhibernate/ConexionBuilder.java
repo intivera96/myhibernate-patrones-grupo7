@@ -9,16 +9,18 @@ public class ConexionBuilder
 {
 	
 	private static final String driver = "org.hsqldb.jdbc.JDBCDriver" ;
-	private static String url = "";
+	private static String url = new String();
 	
 	public static Connection buildConexion() {
 		try{
 			Scanner s = new Scanner(System.in);
 			
-			System.out.println("Enter url of server:");
+			System.out.println("Enter url of server or press enter for default url(jdbc:hsqldb:hsql://localhost:9001/xdb):");
 			url = s.nextLine();
 			
 			Class.forName(driver);
+			
+			if(url.isEmpty())url = "jdbc:hsqldb:hsql://localhost:9001/xdb";
 			
 			return DriverManager.getConnection(url);
 			
